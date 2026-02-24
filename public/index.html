@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Mind Clash — Đấu Tâm Lý</title>
+  <meta name="description" content="Game đấu tâm lý đồng thời online - Đọc vị đối thủ, chọn chiêu thức, giành chiến thắng!">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+  <!-- LOBBY SCREEN -->
+  <div id="screen-lobby" class="screen active">
+    <div class="lobby-container">
+      <h1 class="game-title">MIND<span class="accent">CLASH</span></h1>
+      <p class="subtitle">Đấu Tâm Lý Đồng Thời</p>
+      <div class="lobby-actions">
+        <button id="btn-create" class="btn btn-primary">⚔️ Tạo Phòng</button>
+        <div class="divider"><span>hoặc</span></div>
+        <div class="join-group">
+          <input id="input-code" type="text" maxlength="4" placeholder="Nhập mã phòng" autocomplete="off">
+          <button id="btn-join" class="btn btn-secondary">Tham Gia</button>
+        </div>
+        <p id="lobby-error" class="error-text"></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- WAITING SCREEN -->
+  <div id="screen-waiting" class="screen">
+    <div class="waiting-container">
+      <h2>Phòng đã tạo!</h2>
+      <div class="room-code-display">
+        <p>Gửi mã này cho bạn bè:</p>
+        <div id="room-code" class="room-code"></div>
+        <button id="btn-copy" class="btn btn-small">📋 Sao chép</button>
+      </div>
+      <div class="loading-dots">
+        <p>Đang chờ đối thủ<span class="dots"></span></p>
+      </div>
+    </div>
+  </div>
+
+  <!-- GAME SCREEN -->
+  <div id="screen-game" class="screen">
+    <!-- Top bar: opponent info -->
+    <div class="player-panel opponent-panel">
+      <div class="player-info">
+        <span class="player-label">🎯 Đối thủ</span>
+        <div class="stats">
+          <div class="lives" id="opponent-lives"></div>
+          <div class="bullets-display">
+            <span class="bullet-icon">💰</span>
+            <span id="opponent-bullets">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="opponent-status" id="opponent-status">Đang chọn chiêu...</div>
+    </div>
+
+    <!-- Center: Turn info & reveal area -->
+    <div class="battle-area">
+      <div class="turn-indicator">Lượt <span id="turn-number">1</span></div>
+      <div class="reveal-area" id="reveal-area">
+        <div class="reveal-card" id="reveal-p1">
+          <div class="card-inner">
+            <div class="card-front">❓</div>
+            <div class="card-back" id="reveal-p1-back"></div>
+          </div>
+        </div>
+        <div class="vs-text">VS</div>
+        <div class="reveal-card" id="reveal-p2">
+          <div class="card-inner">
+            <div class="card-front">❓</div>
+            <div class="card-back" id="reveal-p2-back"></div>
+          </div>
+        </div>
+      </div>
+      <div class="result-text" id="result-text"></div>
+    </div>
+
+    <!-- Bottom: your info & move selection -->
+    <div class="player-panel your-panel">
+      <div class="player-info">
+        <span class="player-label">🎮 Bạn</span>
+        <div class="stats">
+          <div class="lives" id="your-lives"></div>
+          <div class="bullets-display">
+            <span class="bullet-icon">💰</span>
+            <span id="your-bullets">0</span>
+          </div>
+        </div>
+      </div>
+      <div class="nap-indicator" id="nap-indicator" style="display:none">
+        <span class="streak-badge">🔥 Combo Nạp!</span>
+      </div>
+    </div>
+
+    <!-- Move selection grid -->
+    <div class="move-selection" id="move-selection">
+      <div class="move-group" data-group="yellow">
+        <div class="group-label">Vàng — Tích Lũy</div>
+        <div class="move-cards" id="cards-yellow"></div>
+      </div>
+      <div class="move-group" data-group="blue">
+        <div class="group-label">Xanh — Kỹ Thuật</div>
+        <div class="move-cards" id="cards-blue"></div>
+      </div>
+      <div class="move-group" data-group="red">
+        <div class="group-label">Đỏ — Tấn Công</div>
+        <div class="move-cards" id="cards-red"></div>
+      </div>
+      <div class="move-group" data-group="special">
+        <div class="group-label">Đặc Biệt</div>
+        <div class="move-cards" id="cards-special"></div>
+      </div>
+    </div>
+
+    <!-- History sidebar toggle -->
+    <button class="history-toggle" id="history-toggle">📜</button>
+    <div class="history-panel" id="history-panel">
+      <h3>Lịch sử</h3>
+      <div class="history-list" id="history-list"></div>
+    </div>
+  </div>
+
+  <!-- GAME OVER SCREEN -->
+  <div id="screen-gameover" class="screen">
+    <div class="gameover-container">
+      <h1 id="gameover-title" class="gameover-title"></h1>
+      <p id="gameover-subtitle" class="gameover-subtitle"></p>
+      <div class="gameover-actions">
+        <button id="btn-rematch" class="btn btn-primary">🔄 Đấu lại</button>
+        <button id="btn-lobby" class="btn btn-secondary">🏠 Về sảnh</button>
+      </div>
+      <p id="rematch-status" class="rematch-status"></p>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
