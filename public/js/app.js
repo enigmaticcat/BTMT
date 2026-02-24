@@ -19,12 +19,16 @@ const MOVES = {
     magic_hand: { id: 'magic_hand', name: 'Ma Thuật', cost: 5, group: 'special', emoji: '✋', desc: 'Thắng tất cả trừ Mìn' },
 };
 
+const DIFF_LABELS = { easy: '😊 Dễ', normal: '😈 Thường', hard: '💀 Khó' };
+
 // State
 let myRole = null;
 let gameActive = false;
 let selectedMove = null;
 let historyOpen = false;
 let turnHistory = [];
+let isAIGame = false;
+let aiDifficulty = 'normal';
 
 // ============================================================
 // SCREEN MANAGEMENT
@@ -78,6 +82,32 @@ document.getElementById('btn-copy').addEventListener('click', () => {
 });
 
 // ============================================================
+// AI MODE — LOBBY
+// ============================================================
+
+document.getElementById('btn-ai').addEventListener('click', () => {
+    const diffPanel = document.getElementById('ai-difficulty');
+    diffPanel.classList.toggle('hidden');
+});
+
+document.querySelectorAll('.diff-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        document.querySelectorAll('.diff-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        aiDifficulty = btn.dataset.diff;
+    });
+});
+
+document.getElementById('btn-start-ai').addEventListener('click', () => {
+    socket.emit('start-ai-game', aiDifficulty, (response) => {
+        if (response.success) {
+            myRole = response.role;
+            isAIGame = true;
+        }
+    });
+});
+
+// ============================================================
 // GAME
 // ============================================================
 
@@ -86,12 +116,27 @@ socket.on('game-start', (data) => {
     gameActive = true;
     selectedMove = null;
     turnHistory = [];
+
+    if (data.isAI) {
+        isAIGame = true;
+        aiDifficulty = data.aiDifficulty || 'normal';
+    }
+
     showScreen('screen-game');
     updateGameUI(data.state, data.opponentState, data.moves, data.turn);
     showMoveSelection(true);
     clearReveal();
     document.getElementById('history-list').innerHTML = '';
-    document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
+
+    // Update opponent label for AI
+    const oppLabel = document.querySelector('.opponent-panel .player-label');
+    if (isAIGame) {
+        oppLabel.textContent = `🤖 Máy (${DIFF_LABELS[aiDifficulty] || 'Thường'})`;
+        document.getElementById('opponent-status').textContent = '🤖 Sẵn sàng';
+    } else {
+        oppLabel.textContent = '🎯 Đối thủ';
+        document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
+    }
 });
 
 function updateGameUI(myState, opponentState, moves, turn) {
@@ -184,10 +229,17 @@ function showMoveSelection(show) {
         // Show waiting overlay
         const overlay = document.createElement('div');
         overlay.className = 'waiting-overlay';
-        overlay.innerHTML = `
-      <h2>✅ Chiêu đã chọn: ${MOVES[selectedMove]?.emoji} ${MOVES[selectedMove]?.name}</h2>
-      <p>Đang chờ đối thủ<span class="dots"></span></p>
-    `;
+        if (isAIGame) {
+            overlay.innerHTML = `
+          <h2>✅ Chiêu đã chọn: ${MOVES[selectedMove]?.emoji} ${MOVES[selectedMove]?.name}</h2>
+          <p>🤖 Máy đang suy nghĩ<span class="dots"></span></p>
+        `;
+        } else {
+            overlay.innerHTML = `
+          <h2>✅ Chiêu đã chọn: ${MOVES[selectedMove]?.emoji} ${MOVES[selectedMove]?.name}</h2>
+          <p>Đang chờ đối thủ<span class="dots"></span></p>
+        `;
+        }
         document.getElementById('screen-game').appendChild(overlay);
     }
 }
@@ -197,7 +249,9 @@ socket.on('move-confirmed', () => {
 });
 
 socket.on('opponent-ready', () => {
-    document.getElementById('opponent-status').textContent = '✅ Đối thủ đã chọn chiêu!';
+    if (!isAIGame) {
+        document.getElementById('opponent-status').textContent = '✅ Đối thủ đã chọn chiêu!';
+    }
 });
 
 // ============================================================
@@ -272,7 +326,11 @@ socket.on('next-turn', (data) => {
     clearReveal();
     updateGameUI(data.state, data.opponentState, data.moves, data.turn);
     showMoveSelection(true);
-    document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
+    if (isAIGame) {
+        document.getElementById('opponent-status').textContent = '🤖 Sẵn sàng';
+    } else {
+        document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
+    }
 });
 
 function clearReveal() {
@@ -322,20 +380,22 @@ function showGameOver(isWinner) {
     if (isWinner) {
         title.textContent = '🏆 CHIẾN THẮNG!';
         title.className = 'gameover-title win';
-        sub.textContent = 'Bạn đã đọc vị đối thủ xuất sắc!';
+        sub.textContent = isAIGame ? 'Bạn đã đánh bại Máy!' : 'Bạn đã đọc vị đối thủ xuất sắc!';
     } else {
         title.textContent = '💀 THẤT BẠI';
         title.className = 'gameover-title lose';
-        sub.textContent = 'Đối thủ đã đọc vị bạn...';
+        sub.textContent = isAIGame ? 'Máy đã thắng bạn...' : 'Đối thủ đã đọc vị bạn...';
     }
 
-    document.getElementById('rematch-status').textContent = '';
+    document.getElementById('rematch-status').textContent = isAIGame ? '' : '';
     showScreen('screen-gameover');
 }
 
 document.getElementById('btn-rematch').addEventListener('click', () => {
     socket.emit('rematch');
-    document.getElementById('rematch-status').textContent = '⏳ Đang chờ đối thủ đồng ý...';
+    if (!isAIGame) {
+        document.getElementById('rematch-status').textContent = '⏳ Đang chờ đối thủ đồng ý...';
+    }
 });
 
 document.getElementById('btn-lobby').addEventListener('click', () => {
@@ -351,6 +411,7 @@ socket.on('rematch-requested', () => {
 // ============================================================
 
 socket.on('opponent-disconnected', () => {
+    if (isAIGame) return; // AI never disconnects
     gameActive = false;
     const overlay = document.querySelector('.waiting-overlay');
     if (overlay) overlay.remove();

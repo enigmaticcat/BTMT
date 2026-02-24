@@ -14,16 +14,16 @@ app.use(express.static(path.join(__dirname, 'public')));
 // ============================================================
 
 const MOVES = {
-  nap:        { id: 'nap',        name: 'Nạp Đạn',    cost: 0, group: 'yellow',  emoji: '🔋' },
-  min:        { id: 'min',        name: 'Mìn',         cost: 0, group: 'yellow',  emoji: '💣' },
-  kip:        { id: 'kip',        name: 'Kíp',         cost: 0, group: 'blue',    emoji: '🧨' },
-  khien:      { id: 'khien',      name: 'Khiên',       cost: 0, group: 'blue',    emoji: '🛡️' },
-  sung:       { id: 'sung',       name: 'Súng',        cost: 1, group: 'red',     emoji: '🔫' },
-  moc:        { id: 'moc',        name: 'Móc',         cost: 1, group: 'red',     emoji: '🪝' },
-  keo:        { id: 'keo',        name: 'Kéo',         cost: 1, group: 'blue',    emoji: '✂️' },
-  shotgun:    { id: 'shotgun',    name: 'Shotgun',     cost: 2, group: 'red',     emoji: '🔥' },
-  zombie:     { id: 'zombie',     name: 'Zombie',      cost: 3, group: 'red',     emoji: '🧟' },
-  sieu_khien: { id: 'sieu_khien', name: 'Siêu Khiên',  cost: 2, group: 'special', emoji: '⚡' },
+  nap: { id: 'nap', name: 'Nạp Đạn', cost: 0, group: 'yellow', emoji: '🔋' },
+  min: { id: 'min', name: 'Mìn', cost: 0, group: 'yellow', emoji: '💣' },
+  kip: { id: 'kip', name: 'Kíp', cost: 0, group: 'blue', emoji: '🧨' },
+  khien: { id: 'khien', name: 'Khiên', cost: 0, group: 'blue', emoji: '🛡️' },
+  sung: { id: 'sung', name: 'Súng', cost: 1, group: 'red', emoji: '🔫' },
+  moc: { id: 'moc', name: 'Móc', cost: 1, group: 'red', emoji: '🪝' },
+  keo: { id: 'keo', name: 'Kéo', cost: 1, group: 'blue', emoji: '✂️' },
+  shotgun: { id: 'shotgun', name: 'Shotgun', cost: 2, group: 'red', emoji: '🔥' },
+  zombie: { id: 'zombie', name: 'Zombie', cost: 3, group: 'red', emoji: '🧟' },
+  sieu_khien: { id: 'sieu_khien', name: 'Siêu Khiên', cost: 2, group: 'special', emoji: '⚡' },
   magic_hand: { id: 'magic_hand', name: 'Bàn Tay Ma Thuật', cost: 5, group: 'special', emoji: '✋' },
 };
 
@@ -234,6 +234,75 @@ function getAvailableMoves(playerState) {
 }
 
 // ============================================================
+// AI LOGIC
+// ============================================================
+
+function chooseAIMove(difficulty, aiState, playerState, history) {
+  const available = [];
+  for (const [id, move] of Object.entries(MOVES)) {
+    const canAfford = aiState.bullets >= move.cost;
+    const notCooldown = !(id === 'nap' && aiState.cooldown);
+    if (canAfford && notCooldown) available.push(id);
+  }
+
+  if (available.length === 0) return 'nap';
+
+  if (difficulty === 'easy') {
+    return available[Math.floor(Math.random() * available.length)];
+  }
+
+  // Helper: pick random from array
+  const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
+
+  // Smart move selection for normal/hard
+  function smartMove() {
+    const pb = playerState.bullets;
+    const ab = aiState.bullets;
+
+    // If player has 0 bullets, they'll likely nap -> attack them
+    if (pb === 0) {
+      const attacks = available.filter(m => ['sung', 'moc', 'shotgun', 'zombie', 'magic_hand'].includes(m));
+      if (attacks.length > 0) return pick(attacks);
+    }
+
+    // If AI has 0 bullets, must nap
+    if (ab === 0) return 'nap';
+
+    // If player has been napping a lot recently, punish
+    const lastMoves = history.slice(-3);
+    const playerNaps = lastMoves.filter(h => h.p2Move === 'nap' || h.p1Move === 'nap').length;
+    if (playerNaps >= 2) {
+      const attacks = available.filter(m => ['sung', 'moc', 'shotgun'].includes(m));
+      if (attacks.length > 0) return pick(attacks);
+    }
+
+    // If player likely attacks (has bullets), defend
+    if (pb >= 2) {
+      const defenses = available.filter(m => ['khien', 'sieu_khien', 'kip', 'keo'].includes(m));
+      if (defenses.length > 0 && Math.random() > 0.4) return pick(defenses);
+    }
+
+    // Balance: nap if low on bullets
+    if (ab <= 1 && available.includes('nap')) {
+      if (Math.random() > 0.3) return 'nap';
+    }
+
+    return pick(available);
+  }
+
+  if (difficulty === 'normal') {
+    return Math.random() < 0.5 ? smartMove() : pick(available);
+  }
+
+  // Hard: heavily strategic
+  if (difficulty === 'hard') {
+    return smartMove();
+  }
+
+  return pick(available);
+}
+
+// ============================================================
 // ROOM MANAGEMENT
 // ============================================================
 
@@ -271,6 +340,39 @@ io.on('connection', (socket) => {
     socket.join(code);
     callback({ success: true, code, role: 'p1' });
     console.log(`Room ${code} created by ${socket.id}`);
+  });
+
+  // AI GAME
+  socket.on('start-ai-game', (difficulty, callback) => {
+    const validDiffs = ['easy', 'normal', 'hard'];
+    if (!validDiffs.includes(difficulty)) difficulty = 'normal';
+
+    const code = 'AI_' + generateRoomCode();
+    const room = {
+      code,
+      players: { p1: socket.id, p2: 'AI' },
+      gameState: createGameState(),
+      isAI: true,
+      aiDifficulty: difficulty,
+    };
+    rooms.set(code, room);
+    currentRoom = code;
+    playerRole = 'p1';
+    socket.join(code);
+
+    const movesP1 = getAvailableMoves(room.gameState.p1);
+    callback({ success: true, code, role: 'p1' });
+
+    socket.emit('game-start', {
+      role: 'p1',
+      state: room.gameState.p1,
+      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+      moves: movesP1,
+      turn: room.gameState.turn,
+      isAI: true,
+      aiDifficulty: difficulty,
+    });
+    console.log(`AI Room ${code} created (${difficulty}) by ${socket.id}`);
   });
 
   socket.on('join-room', (code, callback) => {
@@ -319,7 +421,24 @@ io.on('connection', (socket) => {
 
     room.gameState.moves[playerRole] = moveId;
 
-    // Notify opponent that this player has selected
+    // AI opponent: generate AI move after short delay
+    if (room.isAI && playerRole === 'p1') {
+      socket.emit('move-confirmed');
+      const aiDelay = 600 + Math.random() * 600; // 600-1200ms
+      setTimeout(() => {
+        const aiMove = chooseAIMove(
+          room.aiDifficulty,
+          room.gameState.p2,
+          room.gameState.p1,
+          room.gameState.history
+        );
+        room.gameState.moves.p2 = aiMove;
+        resolveAndSend(room, socket);
+      }, aiDelay);
+      return;
+    }
+
+    // PvP: Notify opponent that this player has selected
     const opponentRole = playerRole === 'p1' ? 'p2' : 'p1';
     const opponentSocketId = room.players[opponentRole];
     if (opponentSocketId) {
@@ -329,20 +448,29 @@ io.on('connection', (socket) => {
 
     // If both have selected, resolve
     if (room.gameState.moves.p1 && room.gameState.moves.p2) {
-      const result = resolveTurn(room);
+      resolveAndSend(room);
+    }
+  });
 
-      // Send result to each player with their perspective
-      io.to(room.players.p1).emit('turn-result', {
-        yourMove: result.p1Move,
-        opponentMove: result.p2Move,
-        result: result.p1Result,
-        description: result.descP1,
-        yourState: result.p1State,
-        opponentState: result.p2State,
-        turn: result.turn,
-        gameOver: result.gameOver,
-        winner: result.winner === 'p1' ? 'you' : (result.winner === 'p2' ? 'opponent' : null),
-      });
+  function resolveAndSend(room, aiSocket) {
+    const result = resolveTurn(room);
+
+    // Send result to P1
+    const p1Data = {
+      yourMove: result.p1Move,
+      opponentMove: result.p2Move,
+      result: result.p1Result,
+      description: result.descP1,
+      yourState: result.p1State,
+      opponentState: result.p2State,
+      turn: result.turn,
+      gameOver: result.gameOver,
+      winner: result.winner === 'p1' ? 'you' : (result.winner === 'p2' ? 'opponent' : null),
+    };
+    io.to(room.players.p1).emit('turn-result', p1Data);
+
+    // Send result to P2 (skip if AI)
+    if (room.players.p2 !== 'AI') {
       io.to(room.players.p2).emit('turn-result', {
         yourMove: result.p2Move,
         opponentMove: result.p1Move,
@@ -354,31 +482,49 @@ io.on('connection', (socket) => {
         gameOver: result.gameOver,
         winner: result.winner === 'p2' ? 'you' : (result.winner === 'p1' ? 'opponent' : null),
       });
+    }
 
-      // Send next turn moves if game not over
-      if (!result.gameOver) {
-        setTimeout(() => {
-          io.to(room.players.p1).emit('next-turn', {
-            moves: getAvailableMoves(room.gameState.p1),
-            state: room.gameState.p1,
-            opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
-            turn: room.gameState.turn,
-          });
+    // Send next turn moves if game not over
+    if (!result.gameOver) {
+      setTimeout(() => {
+        io.to(room.players.p1).emit('next-turn', {
+          moves: getAvailableMoves(room.gameState.p1),
+          state: room.gameState.p1,
+          opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+          turn: room.gameState.turn,
+        });
+        if (room.players.p2 !== 'AI') {
           io.to(room.players.p2).emit('next-turn', {
             moves: getAvailableMoves(room.gameState.p2),
             state: room.gameState.p2,
             opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
             turn: room.gameState.turn,
           });
-        }, 3500); // delay for reveal animation
-      }
+        }
+      }, 3500);
     }
-  });
+  }
 
   socket.on('rematch', () => {
     if (!currentRoom) return;
     const room = rooms.get(currentRoom);
     if (!room) return;
+
+    // AI rooms: instant rematch
+    if (room.isAI) {
+      room.gameState = createGameState();
+      const movesP1 = getAvailableMoves(room.gameState.p1);
+      socket.emit('game-start', {
+        role: 'p1',
+        state: room.gameState.p1,
+        opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+        moves: movesP1,
+        turn: room.gameState.turn,
+        isAI: true,
+        aiDifficulty: room.aiDifficulty,
+      });
+      return;
+    }
 
     if (!room.rematchVotes) room.rematchVotes = new Set();
     room.rematchVotes.add(playerRole);

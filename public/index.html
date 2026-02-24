@@ -1,14 +1,19 @@
 <!DOCTYPE html>
 <html lang="vi">
+
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Mind Clash — Đấu Tâm Lý</title>
-  <meta name="description" content="Game đấu tâm lý đồng thời online - Đọc vị đối thủ, chọn chiêu thức, giành chiến thắng!">
+  <meta name="description"
+    content="Game đấu tâm lý đồng thời online - Đọc vị đối thủ, chọn chiêu thức, giành chiến thắng!">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link
+    href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@400;500;600;700&display=swap"
+    rel="stylesheet">
   <link rel="stylesheet" href="/css/style.css">
 </head>
+
 <body>
   <!-- LOBBY SCREEN -->
   <div id="screen-lobby" class="screen active">
@@ -17,6 +22,17 @@
       <p class="subtitle">Đấu Tâm Lý Đồng Thời</p>
       <div class="lobby-actions">
         <button id="btn-create" class="btn btn-primary">⚔️ Tạo Phòng</button>
+        <div class="divider"><span>hoặc</span></div>
+        <button id="btn-ai" class="btn btn-ai">🤖 Đấu với Máy</button>
+        <div id="ai-difficulty" class="ai-difficulty hidden">
+          <span class="diff-label">Chọn độ khó:</span>
+          <div class="diff-buttons">
+            <button class="diff-btn" data-diff="easy">😊 Dễ</button>
+            <button class="diff-btn active" data-diff="normal">😈 Thường</button>
+            <button class="diff-btn" data-diff="hard">💀 Khó</button>
+          </div>
+          <button id="btn-start-ai" class="btn btn-primary">⚡ Bắt đầu!</button>
+        </div>
         <div class="divider"><span>hoặc</span></div>
         <div class="join-group">
           <input id="input-code" type="text" maxlength="4" placeholder="Nhập mã phòng" autocomplete="off">
@@ -141,4 +157,5 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/app.js"></script>
 </body>
+
 </html>
