@@ -31,8 +31,8 @@ let isAIGame = false;
 let aiDifficulty = 'normal';
 
 let turnTimer = null;
-let myTimeBank = 30.0;
-let oppTimeBank = 30.0;
+let myTimeBank = 15.0;
+let oppTimeBank = 15.0;
 let myTurnStart = 0;
 let myMoveSelected = false;
 let oppMoveSelected = false;
@@ -217,8 +217,8 @@ socket.on('game-start', (data) => {
 
 function updateGameUI(myState, opponentState, moves, turn) {
     // Sync time banks
-    myTimeBank = myState.timeBank || 30.0;
-    oppTimeBank = opponentState.timeBank || 30.0;
+    myTimeBank = myState.timeBank || 15.0;
+    oppTimeBank = opponentState.timeBank || 15.0;
 
     document.getElementById('your-time').textContent = myTimeBank.toFixed(1);
     document.getElementById('opponent-time').textContent = oppTimeBank.toFixed(1);

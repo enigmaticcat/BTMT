@@ -210,8 +210,8 @@ function resolveTurn(room) {
 
 function createGameState() {
   return {
-    p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 30.0 },
-    p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 30.0 },
+    p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 15.0 },
+    p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 15.0 },
     turn: 1,
     turnStartedAt: null,
     firstToMove: null,
@@ -515,8 +515,8 @@ io.on('connection', (socket) => {
     if (p1Timeout) room.gameState.p1.lives -= 1;
     if (p2Timeout) room.gameState.p2.lives -= 1;
 
-    room.gameState.p1.timeBank = 30.0;
-    room.gameState.p2.timeBank = 30.0;
+    room.gameState.p1.timeBank = 15.0;
+    room.gameState.p2.timeBank = 15.0;
 
     const p1Desc = p1Timeout && p2Timeout ? 'Cả hai đều hết thời gian! Mất 1 mạng.' : (p1Timeout ? 'Bạn đã hết thời gian và mất 1 mạng!' : 'Đối thủ đã hết thời gian!');
     const p2Desc = p1Timeout && p2Timeout ? 'Cả hai đều hết thời gian! Mất 1 mạng.' : (p2Timeout ? 'Bạn đã hết thời gian và mất 1 mạng!' : 'Đối thủ đã hết thời gian!');
