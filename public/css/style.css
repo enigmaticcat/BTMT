@@ -937,3 +937,111 @@ body {
     font-size: 0.6rem;
   }
 }
+
+/* ============================================================
+   AUGMENT SELECTION SCREEN
+   ============================================================ */
+
+.augment-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  padding: 40px 20px;
+  background: linear-gradient(135deg, rgba(170, 85, 255, 0.1) 0%, rgba(0, 212, 255, 0.05) 100%);
+}
+
+.augment-container h2 {
+  font-size: 2.5rem;
+  margin-bottom: 10px;
+  background: linear-gradient(135deg, var(--accent), var(--special));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.augment-subtitle {
+  font-size: 1rem;
+  color: var(--text-secondary);
+  margin-bottom: 30px;
+}
+
+.augment-timer {
+  font-size: 1.2rem;
+  margin-bottom: 30px;
+  padding: 10px 20px;
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.augment-timer span:nth-child(2) {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--yellow);
+  margin: 0 8px;
+}
+
+.augment-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 15px;
+  width: 100%;
+  max-width: 900px;
+}
+
+.augment-card {
+  padding: 15px;
+  background: var(--glass);
+  border: 2px solid var(--glass-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+}
+
+.augment-card:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: var(--accent);
+  transform: translateY(-4px);
+  box-shadow: 0 4px 20px rgba(0, 212, 255, 0.2);
+}
+
+.augment-card.selected {
+  background: rgba(0, 212, 255, 0.2);
+  border-color: var(--accent);
+  box-shadow: 0 0 20px rgba(0, 212, 255, 0.4);
+}
+
+.augment-emoji {
+  font-size: 2.5rem;
+}
+
+.augment-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.augment-desc {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  line-height: 1.3;
+}
+
+.augment-label {
+  font-size: 0.85rem;
+  padding: 5px 10px;
+  background: rgba(170, 85, 255, 0.2);
+  border: 1px solid var(--special);
+  border-radius: 6px;
+  margin-top: 8px;
+  color: var(--special);
+}

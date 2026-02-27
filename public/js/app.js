@@ -29,6 +29,7 @@ let historyOpen = false;
 let turnHistory = [];
 let isAIGame = false;
 let aiDifficulty = 'normal';
+let selectedAugment = null;
 
 let turnTimer = null;
 let myTimeBank = 15.0;
@@ -170,6 +171,56 @@ document.getElementById('btn-start-ai').addEventListener('click', () => {
 });
 
 // ============================================================
+// AUGMENT SELECTION
+// ============================================================
+
+socket.on('augment-selection-start', (data) => {
+    showScreen('screen-augment');
+    document.getElementById('augment-timer').textContent = data.timeLimit;
+    renderAugmentCards(data.augments);
+
+    let timeLeft = data.timeLimit;
+    const timerInterval = setInterval(() => {
+        timeLeft -= 1;
+        document.getElementById('augment-timer').textContent = timeLeft;
+        if (timeLeft <= 0) {
+            clearInterval(timerInterval);
+            // Auto-select random augment if not selected
+            if (!selectedAugment) {
+                const randomAug = data.augments[Math.floor(Math.random() * data.augments.length)];
+                selectAugment(randomAug.id);
+            }
+        }
+    }, 1000);
+});
+
+function renderAugmentCards(augments) {
+    const container = document.getElementById('augment-cards');
+    container.innerHTML = '';
+    augments.forEach(aug => {
+        const card = document.createElement('div');
+        card.className = 'augment-card';
+        card.dataset.augmentId = aug.id;
+        card.innerHTML = `
+            <div class="augment-emoji">${aug.emoji}</div>
+            <div class="augment-name">${aug.name}</div>
+            <div class="augment-desc">${aug.desc}</div>
+        `;
+        card.addEventListener('click', () => selectAugment(aug.id));
+        container.appendChild(card);
+    });
+}
+
+function selectAugment(augmentId) {
+    selectedAugment = augmentId;
+    document.querySelectorAll('.augment-card').forEach(card => {
+        card.classList.remove('selected');
+    });
+    document.querySelector(`[data-augment-id="${augmentId}"]`).classList.add('selected');
+    socket.emit('select-augment', augmentId);
+}
+
+// ============================================================
 // GAME
 // ============================================================
 
@@ -185,6 +236,27 @@ socket.on('game-start', (data) => {
     }
 
     showScreen('screen-game');
+    
+    // Show augment info if available
+    if (data.yourAugment) {
+        const your = document.querySelector('.your-panel');
+        if (!your.querySelector('.augment-label')) {
+            const label = document.createElement('div');
+            label.className = 'augment-label';
+            label.innerHTML = `🧬 ${data.yourAugment}`;
+            your.appendChild(label);
+        }
+    }
+    if (data.opponentAugment) {
+        const opp = document.querySelector('.opponent-panel');
+        if (!opp.querySelector('.augment-label')) {
+            const label = document.createElement('div');
+            label.className = 'augment-label';
+            label.innerHTML = `🧬 ${data.opponentAugment}`;
+            opp.appendChild(label);
+        }
+    }
+    
     updateGameUI(data.state, data.opponentState, data.moves, data.turn);
     showMoveSelection(true);
     clearReveal();

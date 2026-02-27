@@ -27,6 +27,46 @@ const MOVES = {
   magic_hand: { id: 'magic_hand', name: 'Bàn Tay Ma Thuật', cost: 5, group: 'special', emoji: '✋' },
 };
 
+// AUGMENTS (Lõi bổ trợ)
+const AUGMENTS = {
+  speed_up: {
+    id: 'speed_up',
+    name: 'Tăng Tốc',
+    desc: 'Đối phương bắt đầu với 7.5s',
+    emoji: '⚡',
+  },
+  slow_down: {
+    id: 'slow_down',
+    name: 'Giảm Tốc',
+    desc: 'Bạn bắt đầu với 22.5s',
+    emoji: '🐢',
+  },
+  extra_life: {
+    id: 'extra_life',
+    name: 'Thêm Mạng',
+    desc: 'Bắt đầu với 4 mạng thay vì 3',
+    emoji: '❤️',
+  },
+  weak_opponent: {
+    id: 'weak_opponent',
+    name: 'Yếu Đối Thủ',
+    desc: 'Đối phương chỉ có 2 mạng',
+    emoji: '💔',
+  },
+  bullet_start: {
+    id: 'bullet_start',
+    name: 'Đạn Ngay',
+    desc: 'Bắt đầu 1 đạn, mất 1 mạng. Sau 3 turn nhận 3 đạn',
+    emoji: '💣',
+  },
+  long_game: {
+    id: 'long_game',
+    name: 'Bền Lâu',
+    desc: 'Sau 10 turn: +2 mạng',
+    emoji: '🏆',
+  },
+};
+
 // Matchup matrix: MATRIX[attacker][defender] = result for attacker
 // 'win' = attacker wins, 'lose' = attacker loses, 'draw' = draw
 const MATRIX = {
@@ -182,6 +222,22 @@ function resolveTurn(room) {
   if (p2.napStreak >= 2) p2.cooldown = true;
   else p2.cooldown = false;
 
+  // Check long_game augment: after turn 10
+  if (p1.augment === 'long_game' && room.gameState.turn === 10) {
+    p1.lives += 2;
+  }
+  if (p2.augment === 'long_game' && room.gameState.turn === 10) {
+    p2.lives += 2;
+  }
+
+  // Check bullet_start augment: after 3 turns give 3 bullets
+  if (p1.augment === 'bullet_start' && p1.bulletStartTurn && room.gameState.turn === p1.bulletStartTurn + 3) {
+    p1.bullets += 3;
+  }
+  if (p2.augment === 'bullet_start' && p2.bulletStartTurn && room.gameState.turn === p2.bulletStartTurn + 3) {
+    p2.bullets += 3;
+  }
+
   // Generate description from P1 perspective
   const descP1 = getResultDescription(p1Move, p2Move, p1Result);
   const descP2 = getResultDescription(p2Move, p1Move, p2Result);
@@ -210,8 +266,8 @@ function resolveTurn(room) {
 
 function createGameState() {
   return {
-    p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 15.0 },
-    p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 15.0 },
+    p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 15.0, augment: null, bulletStartTurn: null },
+    p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 15.0, augment: null, bulletStartTurn: null },
     turn: 1,
     turnStartedAt: null,
     firstToMove: null,
@@ -219,6 +275,7 @@ function createGameState() {
     moves: { p1: null, p2: null },
     gameOver: false,
     timer: null,
+    augmentPhaseEnded: false,
   };
 }
 
@@ -234,6 +291,57 @@ function getAvailableMoves(playerState) {
     });
   }
   return available;
+}
+
+// Get 3 random augments
+function getRandomAugments() {
+  const augmentList = Object.values(AUGMENTS);
+  const shuffled = augmentList.sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, 3);
+}
+
+// Apply augment effects to game state
+function applyAugmentEffects(room) {
+  const p1 = room.gameState.p1;
+  const p2 = room.gameState.p2;
+
+  // P1 augment effects
+  if (p1.augment === 'speed_up') {
+    p2.timeBank = 7.5;
+  }
+  if (p1.augment === 'slow_down') {
+    p1.timeBank = 22.5;
+  }
+  if (p1.augment === 'extra_life') {
+    p1.lives = 4;
+  }
+  if (p1.augment === 'weak_opponent') {
+    p2.lives = 2;
+  }
+  if (p1.augment === 'bullet_start') {
+    p1.bullets = 1;
+    p1.lives = 2;
+    p1.bulletStartTurn = room.gameState.turn;
+  }
+
+  // P2 augment effects
+  if (p2.augment === 'speed_up') {
+    p1.timeBank = 7.5;
+  }
+  if (p2.augment === 'slow_down') {
+    p2.timeBank = 22.5;
+  }
+  if (p2.augment === 'extra_life') {
+    p2.lives = 4;
+  }
+  if (p2.augment === 'weak_opponent') {
+    p1.lives = 2;
+  }
+  if (p2.augment === 'bullet_start') {
+    p2.bullets = 1;
+    p2.lives = 2;
+    p2.bulletStartTurn = room.gameState.turn;
+  }
 }
 
 // ============================================================
@@ -345,7 +453,6 @@ io.on('connection', (socket) => {
     console.log(`Room ${code} created by ${socket.id}`);
   });
 
-  // AI GAME
   socket.on('start-ai-game', (difficulty, callback) => {
     const validDiffs = ['easy', 'normal', 'hard'];
     if (!validDiffs.includes(difficulty)) difficulty = 'normal';
@@ -363,19 +470,13 @@ io.on('connection', (socket) => {
     playerRole = 'p1';
     socket.join(code);
 
-    const movesP1 = getAvailableMoves(room.gameState.p1);
     callback({ success: true, code, role: 'p1' });
 
-    socket.emit('game-start', {
-      role: 'p1',
-      state: room.gameState.p1,
-      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
-      moves: movesP1,
-      turn: room.gameState.turn,
-      isAI: true,
-      aiDifficulty: difficulty,
+    // Start augment selection with 3 random augments
+    socket.emit('augment-selection-start', {
+      augments: getRandomAugments(),
+      timeLimit: 15,
     });
-    startTurnTimer(room);
     console.log(`AI Room ${code} created (${difficulty}) by ${socket.id}`);
   });
 
@@ -391,26 +492,82 @@ io.on('connection', (socket) => {
     socket.join(code);
     callback({ success: true, code, role: 'p2' });
 
-    // Notify both players game is starting
-    const movesP1 = getAvailableMoves(room.gameState.p1);
-    const movesP2 = getAvailableMoves(room.gameState.p2);
-
-    io.to(room.players.p1).emit('game-start', {
-      role: 'p1',
-      state: room.gameState.p1,
-      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
-      moves: movesP1,
-      turn: room.gameState.turn,
+    // Notify both players to start augment selection with 3 random augments
+    const randomAugments = getRandomAugments();
+    io.to(room.players.p1).emit('augment-selection-start', {
+      augments: randomAugments,
+      timeLimit: 15,
     });
-    io.to(room.players.p2).emit('game-start', {
-      role: 'p2',
-      state: room.gameState.p2,
-      opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets, timeBank: room.gameState.p1.timeBank },
-      moves: movesP2,
-      turn: room.gameState.turn,
+    io.to(room.players.p2).emit('augment-selection-start', {
+      augments: randomAugments,
+      timeLimit: 15,
     });
-    startTurnTimer(room);
     console.log(`Room ${code}: Player 2 joined`);
+  });
+
+  // Augment selection handler
+  socket.on('select-augment', (augmentId) => {
+    if (!currentRoom || !playerRole) return;
+    const room = rooms.get(currentRoom);
+    if (!room || room.gameState.augmentPhaseEnded) return;
+
+    const augment = AUGMENTS[augmentId];
+    if (!augment) return;
+
+    room.gameState[playerRole].augment = augmentId;
+
+    // For AI games, select random augment for AI
+    if (room.isAI && !room.gameState.p2.augment) {
+      const aiAugments = Object.keys(AUGMENTS);
+      const randomAug = aiAugments[Math.floor(Math.random() * aiAugments.length)];
+      room.gameState.p2.augment = randomAug;
+    }
+
+    // If both players selected, apply and start game
+    if (room.gameState.p1.augment && room.gameState.p2.augment) {
+      room.gameState.augmentPhaseEnded = true;
+      applyAugmentEffects(room);
+
+      // Send initial game state with augments
+      const movesP1 = getAvailableMoves(room.gameState.p1);
+      const movesP2 = getAvailableMoves(room.gameState.p2);
+
+      if (room.isAI) {
+        // AI game
+        socket.emit('game-start', {
+          role: 'p1',
+          state: room.gameState.p1,
+          opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
+          moves: movesP1,
+          turn: room.gameState.turn,
+          isAI: true,
+          aiDifficulty: room.aiDifficulty,
+          yourAugment: room.gameState.p1.augment,
+          opponentAugment: room.gameState.p2.augment,
+        });
+      } else {
+        // PvP game
+        io.to(room.players.p1).emit('game-start', {
+          role: 'p1',
+          state: room.gameState.p1,
+          opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
+          moves: movesP1,
+          turn: room.gameState.turn,
+          yourAugment: room.gameState.p1.augment,
+          opponentAugment: room.gameState.p2.augment,
+        });
+        io.to(room.players.p2).emit('game-start', {
+          role: 'p2',
+          state: room.gameState.p2,
+          opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets, timeBank: room.gameState.p1.timeBank },
+          moves: movesP2,
+          turn: room.gameState.turn,
+          yourAugment: room.gameState.p2.augment,
+          opponentAugment: room.gameState.p1.augment,
+        });
+      }
+      startTurnTimer(room);
+    }
   });
 
   socket.on('select-move', (moveId) => {
