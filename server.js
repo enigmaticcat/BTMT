@@ -605,15 +605,7 @@ io.on('connection', (socket) => {
     if (room.gameState.timer) { clearInterval(room.gameState.timer); room.gameState.timer = null; }
     if (!room.gameState.moves.p1 || !room.gameState.moves.p2) return;
 
-    const oldP1Lives = room.gameState.p1.lives;
-    const oldP2Lives = room.gameState.p2.lives;
-
     const result = resolveTurn(room);
-
-    if (room.gameState.p1.lives < oldP1Lives || room.gameState.p2.lives < oldP2Lives) {
-      room.gameState.p1.timeBank = 30.0;
-      room.gameState.p2.timeBank = 30.0;
-    }
 
     result.p1State.timeBank = room.gameState.p1.timeBank;
     result.p2State.timeBank = room.gameState.p2.timeBank;
