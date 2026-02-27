@@ -29,6 +29,36 @@ let historyOpen = false;
 let turnHistory = [];
 let isAIGame = false;
 let aiDifficulty = 'normal';
+let turnTimer = null;
+
+function startClientTimer(limit) {
+    if (turnTimer) clearInterval(turnTimer);
+
+    let timeLeft = limit;
+    const timeDisplay = document.getElementById('time-left');
+    const timerDisplay = document.getElementById('timer-display');
+
+    timerDisplay.style.display = 'block';
+    timeDisplay.textContent = timeLeft.toFixed(1);
+    timerDisplay.classList.remove('timer-urgent');
+
+    turnTimer = setInterval(() => {
+        timeLeft -= 0.1;
+        if (timeLeft <= 0) {
+            timeLeft = 0;
+            clearInterval(turnTimer);
+        }
+        timeDisplay.textContent = timeLeft.toFixed(1);
+        if (timeLeft <= 2.0 && !timerDisplay.classList.contains('timer-urgent')) {
+            timerDisplay.classList.add('timer-urgent');
+        }
+    }, 100);
+}
+
+function stopClientTimer() {
+    if (turnTimer) clearInterval(turnTimer);
+    document.getElementById('timer-display').style.display = 'none';
+}
 
 // ============================================================
 // SCREEN MANAGEMENT
@@ -136,6 +166,10 @@ socket.on('game-start', (data) => {
     } else {
         oppLabel.textContent = '🎯 Đối thủ';
         document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
+    }
+
+    if (data.timeLimit) {
+        startClientTimer(data.timeLimit);
     }
 });
 
@@ -259,6 +293,8 @@ socket.on('opponent-ready', () => {
 // ============================================================
 
 socket.on('turn-result', (data) => {
+    stopClientTimer();
+
     // Remove waiting overlay
     const overlay = document.querySelector('.waiting-overlay');
     if (overlay) overlay.remove();
@@ -331,6 +367,10 @@ socket.on('next-turn', (data) => {
     } else {
         document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
     }
+
+    if (data.timeLimit) {
+        startClientTimer(data.timeLimit);
+    }
 });
 
 function clearReveal() {
@@ -386,6 +426,8 @@ function showGameOver(isWinner) {
         title.className = 'gameover-title lose';
         sub.textContent = isAIGame ? 'Máy đã thắng bạn...' : 'Đối thủ đã đọc vị bạn...';
     }
+
+    stopClientTimer();
 
     document.getElementById('rematch-status').textContent = isAIGame ? '' : '';
     showScreen('screen-gameover');

@@ -213,9 +213,11 @@ function createGameState() {
     p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false },
     p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false },
     turn: 1,
+    timeLimit: 5.0,
     history: [],
     moves: { p1: null, p2: null },
     gameOver: false,
+    timer: null,
   };
 }
 
@@ -371,7 +373,9 @@ io.on('connection', (socket) => {
       turn: room.gameState.turn,
       isAI: true,
       aiDifficulty: difficulty,
+      timeLimit: room.gameState.timeLimit,
     });
+    startTurnTimer(room);
     console.log(`AI Room ${code} created (${difficulty}) by ${socket.id}`);
   });
 
@@ -397,6 +401,7 @@ io.on('connection', (socket) => {
       opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
       moves: movesP1,
       turn: room.gameState.turn,
+      timeLimit: room.gameState.timeLimit,
     });
     io.to(room.players.p2).emit('game-start', {
       role: 'p2',
@@ -404,7 +409,9 @@ io.on('connection', (socket) => {
       opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
       moves: movesP2,
       turn: room.gameState.turn,
+      timeLimit: room.gameState.timeLimit,
     });
+    startTurnTimer(room);
     console.log(`Room ${code}: Player 2 joined`);
   });
 
@@ -426,6 +433,7 @@ io.on('connection', (socket) => {
       socket.emit('move-confirmed');
       const aiDelay = 600 + Math.random() * 600; // 600-1200ms
       setTimeout(() => {
+        if (!room.gameState.moves.p1) return; // Check if already resolved
         const aiMove = chooseAIMove(
           room.aiDifficulty,
           room.gameState.p2,
@@ -448,11 +456,37 @@ io.on('connection', (socket) => {
 
     // If both have selected, resolve
     if (room.gameState.moves.p1 && room.gameState.moves.p2) {
+      if (room.gameState.timer) { clearTimeout(room.gameState.timer); room.gameState.timer = null; }
       resolveAndSend(room);
     }
   });
 
+  function startTurnTimer(room) {
+    if (room.gameState.timer) clearTimeout(room.gameState.timer);
+    if (room.gameState.gameOver) return;
+
+    room.gameState.timer = setTimeout(() => {
+      // Time is up!
+      if (!room.gameState.moves.p1) {
+        const available = getAvailableMoves(room.gameState.p1).filter(m => m.available);
+        room.gameState.moves.p1 = available.find(m => m.id === 'nap') ? 'nap' : available[0].id;
+      }
+      if (!room.gameState.moves.p2) {
+        if (room.isAI) {
+          room.gameState.moves.p2 = chooseAIMove(room.aiDifficulty, room.gameState.p2, room.gameState.p1, room.gameState.history);
+        } else {
+          const available = getAvailableMoves(room.gameState.p2).filter(m => m.available);
+          room.gameState.moves.p2 = available.find(m => m.id === 'nap') ? 'nap' : available[0].id;
+        }
+      }
+      resolveAndSend(room);
+    }, room.gameState.timeLimit * 1000);
+  }
+
   function resolveAndSend(room, aiSocket) {
+    if (room.gameState.timer) { clearTimeout(room.gameState.timer); room.gameState.timer = null; }
+    if (!room.gameState.moves.p1 || !room.gameState.moves.p2) return;
+
     const result = resolveTurn(room);
 
     // Send result to P1
@@ -486,12 +520,14 @@ io.on('connection', (socket) => {
 
     // Send next turn moves if game not over
     if (!result.gameOver) {
+      room.gameState.timeLimit = Math.max(1.5, room.gameState.timeLimit - 0.2);
       setTimeout(() => {
         io.to(room.players.p1).emit('next-turn', {
           moves: getAvailableMoves(room.gameState.p1),
           state: room.gameState.p1,
           opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
           turn: room.gameState.turn,
+          timeLimit: room.gameState.timeLimit,
         });
         if (room.players.p2 !== 'AI') {
           io.to(room.players.p2).emit('next-turn', {
@@ -499,8 +535,10 @@ io.on('connection', (socket) => {
             state: room.gameState.p2,
             opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
             turn: room.gameState.turn,
+            timeLimit: room.gameState.timeLimit,
           });
         }
+        startTurnTimer(room);
       }, 3500);
     }
   }
@@ -512,6 +550,7 @@ io.on('connection', (socket) => {
 
     // AI rooms: instant rematch
     if (room.isAI) {
+      if (room.gameState.timer) { clearTimeout(room.gameState.timer); room.gameState.timer = null; }
       room.gameState = createGameState();
       const movesP1 = getAvailableMoves(room.gameState.p1);
       socket.emit('game-start', {
@@ -522,7 +561,9 @@ io.on('connection', (socket) => {
         turn: room.gameState.turn,
         isAI: true,
         aiDifficulty: room.aiDifficulty,
+        timeLimit: room.gameState.timeLimit,
       });
+      startTurnTimer(room);
       return;
     }
 
@@ -536,6 +577,7 @@ io.on('connection', (socket) => {
     }
 
     if (room.rematchVotes.size >= 2) {
+      if (room.gameState.timer) { clearTimeout(room.gameState.timer); room.gameState.timer = null; }
       room.gameState = createGameState();
       room.rematchVotes = new Set();
 
@@ -548,6 +590,7 @@ io.on('connection', (socket) => {
         opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
         moves: movesP1,
         turn: room.gameState.turn,
+        timeLimit: room.gameState.timeLimit,
       });
       io.to(room.players.p2).emit('game-start', {
         role: 'p2',
@@ -555,7 +598,9 @@ io.on('connection', (socket) => {
         opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
         moves: movesP2,
         turn: room.gameState.turn,
+        timeLimit: room.gameState.timeLimit,
       });
+      startTurnTimer(room);
     }
   });
 
