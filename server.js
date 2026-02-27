@@ -210,10 +210,11 @@ function resolveTurn(room) {
 
 function createGameState() {
   return {
-    p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false },
-    p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false },
+    p1: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 30.0 },
+    p2: { lives: 3, bullets: 0, napStreak: 0, cooldown: false, timeBank: 30.0 },
     turn: 1,
-    timeLimit: 5.0,
+    turnStartedAt: null,
+    firstToMove: null,
     history: [],
     moves: { p1: null, p2: null },
     gameOver: false,
@@ -368,12 +369,11 @@ io.on('connection', (socket) => {
     socket.emit('game-start', {
       role: 'p1',
       state: room.gameState.p1,
-      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
       moves: movesP1,
       turn: room.gameState.turn,
       isAI: true,
       aiDifficulty: difficulty,
-      timeLimit: room.gameState.timeLimit,
     });
     startTurnTimer(room);
     console.log(`AI Room ${code} created (${difficulty}) by ${socket.id}`);
@@ -398,18 +398,16 @@ io.on('connection', (socket) => {
     io.to(room.players.p1).emit('game-start', {
       role: 'p1',
       state: room.gameState.p1,
-      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
       moves: movesP1,
       turn: room.gameState.turn,
-      timeLimit: room.gameState.timeLimit,
     });
     io.to(room.players.p2).emit('game-start', {
       role: 'p2',
       state: room.gameState.p2,
-      opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
+      opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets, timeBank: room.gameState.p1.timeBank },
       moves: movesP2,
       turn: room.gameState.turn,
-      timeLimit: room.gameState.timeLimit,
     });
     startTurnTimer(room);
     console.log(`Room ${code}: Player 2 joined`);
@@ -426,7 +424,18 @@ io.on('connection', (socket) => {
     if (pState.bullets < move.cost) return;
     if (moveId === 'nap' && pState.cooldown) return;
 
+    const elapsed = (Date.now() - room.gameState.turnStartedAt) / 1000;
+    room.gameState[playerRole].timeBank -= elapsed;
+    if (room.gameState[playerRole].timeBank < 0) room.gameState[playerRole].timeBank = 0;
+
     room.gameState.moves[playerRole] = moveId;
+
+    if (!room.gameState.firstToMove) {
+      room.gameState.firstToMove = playerRole;
+      room.gameState[playerRole].timeBank += 1.0;
+    } else {
+      room.gameState[playerRole].timeBank += 0.5;
+    }
 
     // AI opponent: generate AI move after short delay
     if (room.isAI && playerRole === 'p1') {
@@ -434,6 +443,18 @@ io.on('connection', (socket) => {
       const aiDelay = 600 + Math.random() * 600; // 600-1200ms
       setTimeout(() => {
         if (!room.gameState.moves.p1) return; // Check if already resolved
+
+        const aiElapsed = (Date.now() - room.gameState.turnStartedAt) / 1000;
+        room.gameState.p2.timeBank -= aiElapsed;
+        if (room.gameState.p2.timeBank < 0) room.gameState.p2.timeBank = 0;
+
+        if (!room.gameState.firstToMove) {
+          room.gameState.firstToMove = 'p2';
+          room.gameState.p2.timeBank += 1.0;
+        } else {
+          room.gameState.p2.timeBank += 0.5;
+        }
+
         const aiMove = chooseAIMove(
           room.aiDifficulty,
           room.gameState.p2,
@@ -456,91 +477,148 @@ io.on('connection', (socket) => {
 
     // If both have selected, resolve
     if (room.gameState.moves.p1 && room.gameState.moves.p2) {
-      if (room.gameState.timer) { clearTimeout(room.gameState.timer); room.gameState.timer = null; }
+      if (room.gameState.timer) { clearInterval(room.gameState.timer); room.gameState.timer = null; }
       resolveAndSend(room);
     }
   });
 
   function startTurnTimer(room) {
-    if (room.gameState.timer) clearTimeout(room.gameState.timer);
+    if (room.gameState.timer) clearInterval(room.gameState.timer);
     if (room.gameState.gameOver) return;
 
-    room.gameState.timer = setTimeout(() => {
-      // Time is up!
+    room.gameState.turnStartedAt = Date.now();
+    room.gameState.firstToMove = null;
+
+    room.gameState.timer = setInterval(() => {
+      const now = Date.now();
+      const elapsed = (now - room.gameState.turnStartedAt) / 1000;
+
+      let p1Timeout = false;
+      let p2Timeout = false;
+
       if (!room.gameState.moves.p1) {
-        const available = getAvailableMoves(room.gameState.p1).filter(m => m.available);
-        room.gameState.moves.p1 = available.find(m => m.id === 'nap') ? 'nap' : available[0].id;
+        if (room.gameState.p1.timeBank - elapsed <= 0) p1Timeout = true;
       }
       if (!room.gameState.moves.p2) {
-        if (room.isAI) {
-          room.gameState.moves.p2 = chooseAIMove(room.aiDifficulty, room.gameState.p2, room.gameState.p1, room.gameState.history);
-        } else {
-          const available = getAvailableMoves(room.gameState.p2).filter(m => m.available);
-          room.gameState.moves.p2 = available.find(m => m.id === 'nap') ? 'nap' : available[0].id;
-        }
+        if (room.gameState.p2.timeBank - elapsed <= 0) p2Timeout = true;
       }
-      resolveAndSend(room);
-    }, room.gameState.timeLimit * 1000);
+
+      if (p1Timeout || p2Timeout) {
+        handleTimeout(room, p1Timeout, p2Timeout);
+      }
+    }, 100);
   }
 
-  function resolveAndSend(room, aiSocket) {
-    if (room.gameState.timer) { clearTimeout(room.gameState.timer); room.gameState.timer = null; }
-    if (!room.gameState.moves.p1 || !room.gameState.moves.p2) return;
+  function handleTimeout(room, p1Timeout, p2Timeout) {
+    if (room.gameState.timer) { clearInterval(room.gameState.timer); room.gameState.timer = null; }
 
-    const result = resolveTurn(room);
+    if (p1Timeout) room.gameState.p1.lives -= 1;
+    if (p2Timeout) room.gameState.p2.lives -= 1;
 
-    // Send result to P1
-    const p1Data = {
-      yourMove: result.p1Move,
-      opponentMove: result.p2Move,
-      result: result.p1Result,
-      description: result.descP1,
-      yourState: result.p1State,
-      opponentState: result.p2State,
-      turn: result.turn,
-      gameOver: result.gameOver,
-      winner: result.winner === 'p1' ? 'you' : (result.winner === 'p2' ? 'opponent' : null),
+    room.gameState.p1.timeBank = 30.0;
+    room.gameState.p2.timeBank = 30.0;
+
+    const p1Desc = p1Timeout && p2Timeout ? 'Cả hai đều hết thời gian! Mất 1 mạng.' : (p1Timeout ? 'Bạn đã hết thời gian và mất 1 mạng!' : 'Đối thủ đã hết thời gian!');
+    const p2Desc = p1Timeout && p2Timeout ? 'Cả hai đều hết thời gian! Mất 1 mạng.' : (p2Timeout ? 'Bạn đã hết thời gian và mất 1 mạng!' : 'Đối thủ đã hết thời gian!');
+
+    const turnResult = {
+      turn: room.gameState.turn,
+      p1Move: 'timeout',
+      p2Move: 'timeout',
+      p1Result: p1Timeout && p2Timeout ? 'lose' : (p1Timeout ? 'lose' : 'win'),
+      p2Result: p2Timeout && p1Timeout ? 'lose' : (p2Timeout ? 'lose' : 'win'),
+      descP1: p1Desc,
+      descP2: p2Desc,
+      p1State: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets, cooldown: room.gameState.p1.cooldown, napStreak: room.gameState.p1.napStreak, timeBank: room.gameState.p1.timeBank },
+      p2State: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, cooldown: room.gameState.p2.cooldown, napStreak: room.gameState.p2.napStreak, timeBank: room.gameState.p2.timeBank },
+      gameOver: room.gameState.p1.lives <= 0 || room.gameState.p2.lives <= 0,
+      winner: room.gameState.p1.lives <= 0 && room.gameState.p2.lives <= 0 ? 'draw' : (room.gameState.p1.lives <= 0 ? 'p2' : (room.gameState.p2.lives <= 0 ? 'p1' : null))
     };
-    io.to(room.players.p1).emit('turn-result', p1Data);
 
-    // Send result to P2 (skip if AI)
+    room.gameState.history.push(turnResult);
+    room.gameState.turn += 1;
+    room.gameState.moves = { p1: null, p2: null };
+
+    if (turnResult.gameOver) {
+      room.gameState.gameOver = true;
+    }
+
+    emitTurnResult(room, turnResult);
+  }
+
+  function emitTurnResult(room, turnResult) {
+    // Send result to P1
+    io.to(room.players.p1).emit('turn-result', {
+      yourMove: turnResult.p1Move,
+      opponentMove: turnResult.p2Move,
+      result: turnResult.p1Result,
+      description: turnResult.descP1,
+      yourState: turnResult.p1State,
+      opponentState: turnResult.p2State,
+      turn: turnResult.turn,
+      gameOver: turnResult.gameOver,
+      winner: turnResult.winner === 'p1' ? 'you' : (turnResult.winner === 'p2' ? 'opponent' : (turnResult.winner === 'draw' ? 'draw' : null)),
+    });
+
+    // Send result to P2
     if (room.players.p2 !== 'AI') {
       io.to(room.players.p2).emit('turn-result', {
-        yourMove: result.p2Move,
-        opponentMove: result.p1Move,
-        result: result.p2Result,
-        description: result.descP2,
-        yourState: result.p2State,
-        opponentState: result.p1State,
-        turn: result.turn,
-        gameOver: result.gameOver,
-        winner: result.winner === 'p2' ? 'you' : (result.winner === 'p1' ? 'opponent' : null),
+        yourMove: turnResult.p2Move,
+        opponentMove: turnResult.p1Move,
+        result: turnResult.p2Result,
+        description: turnResult.descP2,
+        yourState: turnResult.p2State,
+        opponentState: turnResult.p1State,
+        turn: turnResult.turn,
+        gameOver: turnResult.gameOver,
+        winner: turnResult.winner === 'p2' ? 'you' : (turnResult.winner === 'p1' ? 'opponent' : (turnResult.winner === 'draw' ? 'draw' : null)),
       });
     }
 
-    // Send next turn moves if game not over
-    if (!result.gameOver) {
-      room.gameState.timeLimit = Math.max(1.5, room.gameState.timeLimit - 0.2);
+    if (!turnResult.gameOver) {
       setTimeout(() => {
-        io.to(room.players.p1).emit('next-turn', {
-          moves: getAvailableMoves(room.gameState.p1),
-          state: room.gameState.p1,
-          opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
-          turn: room.gameState.turn,
-          timeLimit: room.gameState.timeLimit,
-        });
-        if (room.players.p2 !== 'AI') {
-          io.to(room.players.p2).emit('next-turn', {
-            moves: getAvailableMoves(room.gameState.p2),
-            state: room.gameState.p2,
-            opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
-            turn: room.gameState.turn,
-            timeLimit: room.gameState.timeLimit,
-          });
-        }
-        startTurnTimer(room);
+        sendNextTurn(room);
       }, 3500);
     }
+  }
+
+  function sendNextTurn(room) {
+    if (room.gameState.gameOver) return;
+    io.to(room.players.p1).emit('next-turn', {
+      moves: getAvailableMoves(room.gameState.p1),
+      state: room.gameState.p1,
+      opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
+      turn: room.gameState.turn,
+    });
+    if (room.players.p2 !== 'AI') {
+      io.to(room.players.p2).emit('next-turn', {
+        moves: getAvailableMoves(room.gameState.p2),
+        state: room.gameState.p2,
+        opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets, timeBank: room.gameState.p1.timeBank },
+        turn: room.gameState.turn,
+      });
+    }
+    startTurnTimer(room);
+  }
+
+  function resolveAndSend(room, aiSocket) {
+    if (room.gameState.timer) { clearInterval(room.gameState.timer); room.gameState.timer = null; }
+    if (!room.gameState.moves.p1 || !room.gameState.moves.p2) return;
+
+    const oldP1Lives = room.gameState.p1.lives;
+    const oldP2Lives = room.gameState.p2.lives;
+
+    const result = resolveTurn(room);
+
+    if (room.gameState.p1.lives < oldP1Lives || room.gameState.p2.lives < oldP2Lives) {
+      room.gameState.p1.timeBank = 30.0;
+      room.gameState.p2.timeBank = 30.0;
+    }
+
+    result.p1State.timeBank = room.gameState.p1.timeBank;
+    result.p2State.timeBank = room.gameState.p2.timeBank;
+
+    emitTurnResult(room, result);
   }
 
   socket.on('rematch', () => {
@@ -556,12 +634,11 @@ io.on('connection', (socket) => {
       socket.emit('game-start', {
         role: 'p1',
         state: room.gameState.p1,
-        opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+        opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
         moves: movesP1,
         turn: room.gameState.turn,
         isAI: true,
         aiDifficulty: room.aiDifficulty,
-        timeLimit: room.gameState.timeLimit,
       });
       startTurnTimer(room);
       return;
@@ -587,18 +664,16 @@ io.on('connection', (socket) => {
       io.to(room.players.p1).emit('game-start', {
         role: 'p1',
         state: room.gameState.p1,
-        opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets },
+        opponentState: { lives: room.gameState.p2.lives, bullets: room.gameState.p2.bullets, timeBank: room.gameState.p2.timeBank },
         moves: movesP1,
         turn: room.gameState.turn,
-        timeLimit: room.gameState.timeLimit,
       });
       io.to(room.players.p2).emit('game-start', {
         role: 'p2',
         state: room.gameState.p2,
-        opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets },
+        opponentState: { lives: room.gameState.p1.lives, bullets: room.gameState.p1.bullets, timeBank: room.gameState.p1.timeBank },
         moves: movesP2,
         turn: room.gameState.turn,
-        timeLimit: room.gameState.timeLimit,
       });
       startTurnTimer(room);
     }

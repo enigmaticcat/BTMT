@@ -29,35 +29,56 @@ let historyOpen = false;
 let turnHistory = [];
 let isAIGame = false;
 let aiDifficulty = 'normal';
-let turnTimer = null;
 
-function startClientTimer(limit) {
+let turnTimer = null;
+let myTimeBank = 30.0;
+let oppTimeBank = 30.0;
+let myTurnStart = 0;
+let myMoveSelected = false;
+let oppMoveSelected = false;
+
+function startClientTimers() {
     if (turnTimer) clearInterval(turnTimer);
 
-    let timeLeft = limit;
-    const timeDisplay = document.getElementById('time-left');
-    const timerDisplay = document.getElementById('timer-display');
+    myMoveSelected = false;
+    oppMoveSelected = false;
 
-    timerDisplay.style.display = 'block';
-    timeDisplay.textContent = timeLeft.toFixed(1);
-    timerDisplay.classList.remove('timer-urgent');
+    myTurnStart = Date.now();
+    let initialMyTime = myTimeBank;
+    let initialOppTime = oppTimeBank;
+
+    document.getElementById('your-time').textContent = initialMyTime.toFixed(1);
+    document.getElementById('opponent-time').textContent = initialOppTime.toFixed(1);
 
     turnTimer = setInterval(() => {
-        timeLeft -= 0.1;
-        if (timeLeft <= 0) {
-            timeLeft = 0;
-            clearInterval(turnTimer);
+        const elapsed = (Date.now() - myTurnStart) / 1000;
+
+        if (!myMoveSelected && !gameActive) return;
+
+        if (!myMoveSelected) {
+            let t = initialMyTime - elapsed;
+            if (t < 0) t = 0;
+            const el = document.getElementById('your-time');
+            el.textContent = t.toFixed(1);
+            if (t <= 5.0) el.parentElement.classList.add('timer-urgent');
+            else el.parentElement.classList.remove('timer-urgent');
         }
-        timeDisplay.textContent = timeLeft.toFixed(1);
-        if (timeLeft <= 2.0 && !timerDisplay.classList.contains('timer-urgent')) {
-            timerDisplay.classList.add('timer-urgent');
+
+        if (!oppMoveSelected) {
+            let t = initialOppTime - elapsed;
+            if (t < 0) t = 0;
+            const el = document.getElementById('opponent-time');
+            el.textContent = t.toFixed(1);
+            if (t <= 5.0) el.parentElement.classList.add('timer-urgent');
+            else el.parentElement.classList.remove('timer-urgent');
         }
     }, 100);
 }
 
-function stopClientTimer() {
+function stopClientTimers() {
     if (turnTimer) clearInterval(turnTimer);
-    document.getElementById('timer-display').style.display = 'none';
+    myMoveSelected = true;
+    oppMoveSelected = true;
 }
 
 // ============================================================
@@ -168,12 +189,17 @@ socket.on('game-start', (data) => {
         document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
     }
 
-    if (data.timeLimit) {
-        startClientTimer(data.timeLimit);
-    }
+    startClientTimers();
 });
 
 function updateGameUI(myState, opponentState, moves, turn) {
+    // Sync time banks
+    myTimeBank = myState.timeBank || 30.0;
+    oppTimeBank = opponentState.timeBank || 30.0;
+
+    document.getElementById('your-time').textContent = myTimeBank.toFixed(1);
+    document.getElementById('opponent-time').textContent = oppTimeBank.toFixed(1);
+
     // Turn
     document.getElementById('turn-number').textContent = turn;
 
@@ -247,6 +273,7 @@ function renderMoveCards(moves) {
 function selectMove(moveId) {
     if (!gameActive || selectedMove) return;
     selectedMove = moveId;
+    myMoveSelected = true;
     socket.emit('select-move', moveId);
     showMoveSelection(false);
 }
@@ -283,6 +310,7 @@ socket.on('move-confirmed', () => {
 });
 
 socket.on('opponent-ready', () => {
+    oppMoveSelected = true;
     if (!isAIGame) {
         document.getElementById('opponent-status').textContent = '✅ Đối thủ đã chọn chiêu!';
     }
@@ -293,7 +321,7 @@ socket.on('opponent-ready', () => {
 // ============================================================
 
 socket.on('turn-result', (data) => {
-    stopClientTimer();
+    stopClientTimers();
 
     // Remove waiting overlay
     const overlay = document.querySelector('.waiting-overlay');
@@ -338,10 +366,7 @@ socket.on('turn-result', (data) => {
         }
 
         // Update stats
-        renderLives('your-lives', data.yourState.lives);
-        renderLives('opponent-lives', data.opponentState.lives);
-        document.getElementById('your-bullets').textContent = data.yourState.bullets;
-        document.getElementById('opponent-bullets').textContent = data.opponentState.bullets;
+        updateGameUI(data.yourState, data.opponentState, null, data.turn);
     }, 1200);
 
     // Add to history
@@ -368,9 +393,7 @@ socket.on('next-turn', (data) => {
         document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
     }
 
-    if (data.timeLimit) {
-        startClientTimer(data.timeLimit);
-    }
+    startClientTimers();
 });
 
 function clearReveal() {
@@ -421,13 +444,17 @@ function showGameOver(isWinner) {
         title.textContent = '🏆 CHIẾN THẮNG!';
         title.className = 'gameover-title win';
         sub.textContent = isAIGame ? 'Bạn đã đánh bại Máy!' : 'Bạn đã đọc vị đối thủ xuất sắc!';
-    } else {
+    } else if (isWinner === false) {
         title.textContent = '💀 THẤT BẠI';
         title.className = 'gameover-title lose';
         sub.textContent = isAIGame ? 'Máy đã thắng bạn...' : 'Đối thủ đã đọc vị bạn...';
+    } else {
+        title.textContent = '🤝 HÒA';
+        title.className = 'gameover-title draw';
+        sub.textContent = 'Trận chiến bất phân thắng bại!';
     }
 
-    stopClientTimer();
+    stopClientTimers();
 
     document.getElementById('rematch-status').textContent = isAIGame ? '' : '';
     showScreen('screen-gameover');
