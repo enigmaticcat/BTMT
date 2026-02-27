@@ -37,6 +37,17 @@ let myTurnStart = 0;
 let myMoveSelected = false;
 let oppMoveSelected = false;
 
+// Voice Chat State
+let localStream = null;
+let peerConnection = null;
+let isMicOn = false;
+
+const configuration = {
+    iceServers: [
+        { urls: 'stun:stun.l.google.com:19302' }
+    ]
+};
+
 function startClientTimers() {
     if (turnTimer) clearInterval(turnTimer);
 
@@ -187,6 +198,18 @@ socket.on('game-start', (data) => {
     } else {
         oppLabel.textContent = '🎯 Đối thủ';
         document.getElementById('opponent-status').textContent = 'Đang chọn chiêu...';
+    }
+
+    // Voice Setup
+    if (!isAIGame) {
+        document.getElementById('btn-toggle-mic').style.display = 'inline-block';
+        if (myRole === 'p1') {
+            initWebRTC(true);
+        } else {
+            initWebRTC(false);
+        }
+    } else {
+        document.getElementById('btn-toggle-mic').style.display = 'none';
     }
 
     startClientTimers();
@@ -497,4 +520,106 @@ socket.on('opponent-disconnected', () => {
 
 socket.on('disconnect', () => {
     gameActive = false;
+    cleanupVoiceChat();
 });
+
+// ============================================================
+// VOICE CHAT (WebRTC)
+// ============================================================
+
+async function initWebRTC(isInitiator) {
+    try {
+        localStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+        // Start muted by default
+        localStream.getAudioTracks().forEach(track => track.enabled = false);
+        isMicOn = false;
+        updateMicBtnUI();
+
+        peerConnection = new RTCPeerConnection(configuration);
+
+        // Add local stream to peer connection
+        localStream.getTracks().forEach(track => {
+            peerConnection.addTrack(track, localStream);
+        });
+
+        // Handle incoming streams
+        peerConnection.ontrack = event => {
+            const remoteAudio = document.getElementById('remote-audio');
+            if (remoteAudio.srcObject !== event.streams[0]) {
+                remoteAudio.srcObject = event.streams[0];
+            }
+        };
+
+        // Handle ICE candidates
+        peerConnection.onicecandidate = event => {
+            if (event.candidate) {
+                socket.emit('webrtc-ice-candidate', event.candidate);
+            }
+        };
+
+        if (isInitiator) {
+            const offer = await peerConnection.createOffer();
+            await peerConnection.setLocalDescription(offer);
+            socket.emit('webrtc-offer', offer);
+        }
+
+    } catch (err) {
+        console.error("Lỗi Microphone:", err);
+        document.getElementById('btn-toggle-mic').textContent = '⚠️ Lỗi Mic';
+        document.getElementById('btn-toggle-mic').disabled = true;
+    }
+}
+
+socket.on('webrtc-offer', async (offer) => {
+    if (!peerConnection) return;
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    socket.emit('webrtc-answer', answer);
+});
+
+socket.on('webrtc-answer', async (answer) => {
+    if (!peerConnection) return;
+    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+});
+
+socket.on('webrtc-ice-candidate', async (candidate) => {
+    if (!peerConnection) return;
+    try {
+        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+    } catch (e) {
+        console.error('Lỗi addIceCandidate', e);
+    }
+});
+
+document.getElementById('btn-toggle-mic').addEventListener('click', () => {
+    if (!localStream) return;
+    isMicOn = !isMicOn;
+    localStream.getAudioTracks().forEach(track => track.enabled = isMicOn);
+    updateMicBtnUI();
+});
+
+function updateMicBtnUI() {
+    const btn = document.getElementById('btn-toggle-mic');
+    if (isMicOn) {
+        btn.textContent = '🔊 Đang Bật Mic';
+        btn.classList.add('mic-active');
+    } else {
+        btn.textContent = '🎤 Bật Mic';
+        btn.classList.remove('mic-active');
+    }
+}
+
+function cleanupVoiceChat() {
+    if (localStream) {
+        localStream.getTracks().forEach(track => track.stop());
+        localStream = null;
+    }
+    if (peerConnection) {
+        peerConnection.close();
+        peerConnection = null;
+    }
+    const remoteAudio = document.getElementById('remote-audio');
+    if (remoteAudio) remoteAudio.srcObject = null;
+}

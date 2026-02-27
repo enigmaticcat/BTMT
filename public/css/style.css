@@ -135,6 +135,28 @@ body {
   border: 1px solid var(--glass-border);
 }
 
+.btn-voice {
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  background: var(--glass);
+  color: var(--text-primary);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: all 0.3s ease;
+  margin-bottom: 8px;
+}
+
+.btn-voice:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.btn-voice.mic-active {
+  background: rgba(68, 221, 136, 0.2);
+  border-color: var(--green);
+  color: var(--green);
+}
+
 .divider {
   display: flex;
   align-items: center;

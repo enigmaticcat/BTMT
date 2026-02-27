@@ -676,6 +676,7 @@ io.on('connection', (socket) => {
     if (currentRoom) {
       const room = rooms.get(currentRoom);
       if (room) {
+        if (room.gameState.timer) clearInterval(room.gameState.timer);
         const opponentRole = playerRole === 'p1' ? 'p2' : 'p1';
         const opponentSocketId = room.players[opponentRole];
         if (opponentSocketId) {
@@ -685,13 +686,47 @@ io.on('connection', (socket) => {
       }
     }
   });
+
+  // WebRTC Signaling for Voice Chat
+  socket.on('webrtc-offer', (data) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    const opponentRole = playerRole === 'p1' ? 'p2' : 'p1';
+    const opponentSocketId = room.players[opponentRole];
+    if (opponentSocketId) {
+      io.to(opponentSocketId).emit('webrtc-offer', data);
+    }
+  });
+
+  socket.on('webrtc-answer', (data) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    const opponentRole = playerRole === 'p1' ? 'p2' : 'p1';
+    const opponentSocketId = room.players[opponentRole];
+    if (opponentSocketId) {
+      io.to(opponentSocketId).emit('webrtc-answer', data);
+    }
+  });
+
+  socket.on('webrtc-ice-candidate', (data) => {
+    if (!currentRoom) return;
+    const room = rooms.get(currentRoom);
+    if (!room) return;
+    const opponentRole = playerRole === 'p1' ? 'p2' : 'p1';
+    const opponentSocketId = room.players[opponentRole];
+    if (opponentSocketId) {
+      io.to(opponentSocketId).emit('webrtc-ice-candidate', data);
+    }
+  });
 });
 
 // ============================================================
 // START SERVER
 // ============================================================
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3636;
 server.listen(PORT, () => {
   console.log(`Mind Clash server running on port ${PORT}`);
   console.log(`Open http://localhost:${PORT} to play`);

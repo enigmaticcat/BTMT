@@ -62,6 +62,7 @@
   <div id="screen-game" class="screen">
     <!-- Top bar: opponent info -->
     <div class="player-panel opponent-panel">
+      <div class="voice-status" id="opponent-voice-status"></div>
       <div class="player-info">
         <span class="player-label">🎯 Đối thủ</span>
         <div class="stats">
@@ -99,6 +100,9 @@
 
     <!-- Bottom: your info & move selection -->
     <div class="player-panel your-panel">
+      <div class="voice-controls">
+        <button id="btn-toggle-mic" class="btn-voice icon-mic-off" title="Bật/Tắt Mic">🎤 Bật Mic</button>
+      </div>
       <div class="player-info">
         <span class="player-label">🎮 Bạn</span>
         <div class="stats">
@@ -155,6 +159,8 @@
       <p id="rematch-status" class="rematch-status"></p>
     </div>
   </div>
+
+  <audio id="remote-audio" autoplay></audio>
 
   <script src="/socket.io/socket.io.js"></script>
   <script src="/js/app.js"></script>
