@@ -1,0 +1,46 @@
+#screen-gameover {
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.gameover-container {
+  padding: 40px 24px;
+}
+
+.gameover-title {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 2.5rem;
+  margin-bottom: 12px;
+}
+
+.gameover-title.win {
+  background: linear-gradient(135deg, var(--green), var(--accent));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gameover-title.lose {
+  background: linear-gradient(135deg, var(--red), #ff8844);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.gameover-subtitle {
+  color: var(--text-secondary);
+  margin-bottom: 32px;
+}
+
+.gameover-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}
+
+.rematch-status {
+  color: var(--yellow);
+  margin-top: 16px;
+  font-size: 0.85rem;
+  min-height: 20px;
+}
+

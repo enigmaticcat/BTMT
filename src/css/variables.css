@@ -1,0 +1,17 @@
+:root {
+  --bg-primary: #0a0a1a;
+  --bg-secondary: #12122a;
+  --bg-card: rgba(255, 255, 255, 0.05);
+  --text-primary: #e8e8f0;
+  --text-secondary: #8888aa;
+  --accent: #00d4ff;
+  --red: #ff4455;
+  --blue: #4488ff;
+  --yellow: #ffbb33;
+  --special: #aa55ff;
+  --green: #44dd88;
+  --glass: rgba(255, 255, 255, 0.08);
+  --glass-border: rgba(255, 255, 255, 0.12);
+  --radius: 12px;
+  --radius-lg: 20px;
+}

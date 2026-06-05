@@ -1,0 +1,29 @@
+/* Responsive */
+@media (max-width: 480px) {
+  .game-title {
+    font-size: 2.5rem;
+  }
+
+  .room-code {
+    font-size: 2.2rem;
+    letter-spacing: 8px;
+  }
+
+  .reveal-card {
+    width: 70px;
+    height: 90px;
+  }
+
+  .move-card {
+    min-width: 60px;
+    padding: 8px 4px;
+  }
+
+  .move-card .move-emoji {
+    font-size: 1.2rem;
+  }
+
+  .move-card .move-name {
+    font-size: 0.6rem;
+  }
+}

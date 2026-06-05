@@ -1,0 +1,9 @@
+@import './variables.css';
+@import './base.css';
+@import './lobby.css';
+@import './waiting.css';
+@import './game.css';
+@import './gameover.css';
+@import './animations.css';
+@import './responsive.css';
+@import './augment.css';

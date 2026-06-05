@@ -1,0 +1,60 @@
+#screen-waiting {
+  align-items: center;
+  justify-content: center;
+}
+
+.waiting-container {
+  text-align: center;
+}
+
+.waiting-container h2 {
+  font-family: 'Orbitron', sans-serif;
+  margin-bottom: 24px;
+  color: var(--green);
+}
+
+.room-code-display {
+  margin-bottom: 32px;
+}
+
+.room-code-display p {
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.room-code {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 3rem;
+  font-weight: 900;
+  letter-spacing: 12px;
+  color: var(--accent);
+  text-shadow: 0 0 30px rgba(0, 212, 255, 0.5);
+  margin-bottom: 16px;
+}
+
+.loading-dots p {
+  color: var(--text-secondary);
+}
+
+.dots::after {
+  content: '';
+  animation: dots 1.5s steps(4) infinite;
+}
+
+@keyframes dots {
+  0% {
+    content: '';
+  }
+
+  25% {
+    content: '.';
+  }
+
+  50% {
+    content: '..';
+  }
+
+  75% {
+    content: '...';
+  }
+}

@@ -1,0 +1,33 @@
+/* Animations */
+@keyframes damageFlash {
+
+  0%,
+  100% {
+    background: transparent;
+  }
+
+  50% {
+    background: rgba(255, 68, 85, 0.15);
+  }
+}
+
+.damage-flash {
+  animation: damageFlash 0.4s ease 2;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.slide-in {
+  animation: slideIn 0.4s ease;
+}
+
