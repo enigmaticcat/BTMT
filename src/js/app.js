@@ -5,10 +5,19 @@ import { setupWebRTCSocketListeners, initWebRTC, toggleMic, cleanupVoiceChat } f
 import { showScreen } from './ui/screens.js';
 import { updateGameUI, clearReveal, showMoveSelection, showGameOver, addHistoryItem } from './ui/game.js';
 import { startClientTimers, stopClientTimers } from './ui/timers.js';
-import { MOVES, DIFF_LABELS } from './constants/index.js';
+import { MOVES, AUGMENTS, DIFF_LABELS } from './constants/index.js';
 
 // Setup Lobby DOM events
 setupLobbyEvents();
+
+// History toggle/close
+document.addEventListener('click', (e) => {
+    if (e.target.closest('#history-toggle') || e.target.closest('#history-close')) {
+        const nowOpen = e.target.closest('#history-close') ? false : !gameState.historyOpen;
+        updateGameState({ historyOpen: nowOpen });
+        document.getElementById('history-panel').classList.toggle('open', nowOpen);
+    }
+});
 
 // Setup WebRTC and Voice toggle
 setupWebRTCSocketListeners();
@@ -57,19 +66,25 @@ socket.on('game-start', (data) => {
 
     if (data.yourAugment) {
         const your = document.querySelector('.your-panel');
-        if (your && !your.querySelector('.augment-label')) {
+        const aug = AUGMENTS[data.yourAugment];
+        if (your) {
+            const existing = your.querySelector('.augment-label');
+            if (existing) existing.remove();
             const label = document.createElement('div');
             label.className = 'augment-label';
-            label.innerHTML = `🧬 ${data.yourAugment}`;
+            label.innerHTML = `🧬 ${aug ? aug.emoji + ' ' + aug.name : data.yourAugment}`;
             your.appendChild(label);
         }
     }
     if (data.opponentAugment) {
         const opp = document.querySelector('.opponent-panel');
-        if (opp && !opp.querySelector('.augment-label')) {
+        const aug = AUGMENTS[data.opponentAugment];
+        if (opp) {
+            const existing = opp.querySelector('.augment-label');
+            if (existing) existing.remove();
             const label = document.createElement('div');
             label.className = 'augment-label';
-            label.innerHTML = `🧬 ${data.opponentAugment}`;
+            label.innerHTML = `🧬 ${aug ? aug.emoji + ' ' + aug.name : data.opponentAugment}`;
             opp.appendChild(label);
         }
     }
@@ -123,13 +138,19 @@ socket.on('turn-result', (data) => {
     const p1Back = document.getElementById('reveal-p1-back');
     const p2Back = document.getElementById('reveal-p2-back');
 
-    if (p1Back) {
+    if (p1Back && yourMove) {
         p1Back.innerHTML = `<span>${yourMove.emoji}</span><span class="card-back-name">${yourMove.name}</span>`;
         p1Back.dataset.group = yourMove.group;
+    } else if (p1Back) {
+        p1Back.innerHTML = `<span>⏱️</span><span class="card-back-name">Hết Giờ</span>`;
+        p1Back.dataset.group = 'timeout';
     }
-    if (p2Back) {
+    if (p2Back && oppMove) {
         p2Back.innerHTML = `<span>${oppMove.emoji}</span><span class="card-back-name">${oppMove.name}</span>`;
         p2Back.dataset.group = oppMove.group;
+    } else if (p2Back) {
+        p2Back.innerHTML = `<span>⏱️</span><span class="card-back-name">Hết Giờ</span>`;
+        p2Back.dataset.group = 'timeout';
     }
 
     setTimeout(() => {
@@ -149,8 +170,12 @@ socket.on('turn-result', (data) => {
         }
 
         if (data.result === 'lose') {
-            document.querySelector('.your-panel')?.classList.add('damage-flash');
-            setTimeout(() => document.querySelector('.your-panel')?.classList.remove('damage-flash'), 800);
+            const yourPanel = document.querySelector('.your-panel');
+            yourPanel?.classList.add('damage-flash');
+            if (data.yourState.hp <= 25) yourPanel?.classList.add('hp-critical-flash');
+            setTimeout(() => {
+                yourPanel?.classList.remove('damage-flash', 'hp-critical-flash');
+            }, 800);
         } else if (data.result === 'win') {
             document.querySelector('.opponent-panel')?.classList.add('damage-flash');
             setTimeout(() => document.querySelector('.opponent-panel')?.classList.remove('damage-flash'), 800);
@@ -164,7 +189,7 @@ socket.on('turn-result', (data) => {
 
     if (data.gameOver) {
         setTimeout(() => {
-            showGameOver(data.winner === 'you');
+            showGameOver(data.winner === 'you' ? true : data.winner === 'draw' ? null : false);
         }, 2500);
     }
 });
@@ -175,6 +200,7 @@ socket.on('next-turn', (data) => {
         gameActive: true
     });
 
+    showScreen('screen-game');
     clearReveal();
     updateGameUI(data.state, data.opponentState, data.moves, data.turn);
     showMoveSelection(true);

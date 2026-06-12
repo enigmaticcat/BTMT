@@ -5,7 +5,6 @@ import { showScreen } from './screens.js';
 import { stopClientTimers } from './timers.js';
 
 export function updateGameUI(myState, opponentState, moves, turn) {
-    // Sync time banks
     updateGameState({
         myTimeBank: myState.timeBank || 15.0,
         oppTimeBank: opponentState.timeBank || 15.0
@@ -14,44 +13,61 @@ export function updateGameUI(myState, opponentState, moves, turn) {
     document.getElementById('your-time').textContent = gameState.myTimeBank.toFixed(1);
     document.getElementById('opponent-time').textContent = gameState.oppTimeBank.toFixed(1);
 
-    // Turn
     document.getElementById('turn-number').textContent = turn;
 
-    // Lives
-    renderLives('your-lives', myState.lives);
-    renderLives('opponent-lives', opponentState.lives);
+    renderHP('your-hp', 'your-hp-bar', myState.hp, myState.maxHp);
+    renderHP('opponent-hp', 'opponent-hp-bar', opponentState.hp, opponentState.maxHp);
 
-    // Bullets
     document.getElementById('your-bullets').textContent = myState.bullets;
     document.getElementById('opponent-bullets').textContent = opponentState.bullets;
 
-    // Nạp indicator
+    // Status indicators
     const napInd = document.getElementById('nap-indicator');
-    if (myState.napStreak >= 1 && !myState.cooldown) {
+    const badge = napInd.querySelector('.streak-badge');
+    if (myState.debuff === 'stun') {
         napInd.style.display = 'block';
-        napInd.querySelector('.streak-badge').textContent = '🔥 Combo Nạp sẵn sàng! (+2 đạn)';
-        napInd.querySelector('.streak-badge').style.color = '';
+        badge.textContent = '💫 Choáng — Chỉ dùng nước 0 đạn';
+        badge.style.color = 'var(--red)';
+    } else if (myState.debuff === 'lock') {
+        napInd.style.display = 'block';
+        badge.textContent = '🔒 Bị khóa — Nước đắt nhất không dùng được';
+        badge.style.color = 'var(--red)';
+    } else if (myState.freeMove) {
+        napInd.style.display = 'block';
+        badge.textContent = '⚡ Combo! Lượt này 1 nước miễn phí';
+        badge.style.color = 'var(--yellow)';
+    } else if (myState.napStreak >= 1 && !myState.cooldown) {
+        napInd.style.display = 'block';
+        badge.textContent = '🔥 Combo Nạp sẵn sàng! (+2 đạn)';
+        badge.style.color = '';
     } else if (myState.cooldown) {
         napInd.style.display = 'block';
-        napInd.querySelector('.streak-badge').textContent = '🔒 Cooldown — Không thể Nạp lượt này';
-        napInd.querySelector('.streak-badge').style.color = 'var(--red)';
+        badge.textContent = '🔒 Cooldown — Không thể Nạp lượt này';
+        badge.style.color = 'var(--red)';
     } else {
         napInd.style.display = 'none';
-        napInd.querySelector('.streak-badge').style.color = '';
+        badge.style.color = '';
     }
 
-    // Render move cards
     if (moves) renderMoveCards(moves);
 }
 
-function renderLives(elementId, count) {
-    const el = document.getElementById(elementId);
-    el.innerHTML = '';
-    for (let i = 0; i < 3; i++) {
-        const heart = document.createElement('span');
-        heart.className = 'life' + (i >= count ? ' lost' : '');
-        heart.textContent = '❤️';
-        el.appendChild(heart);
+const BASE_HP = 360;
+
+function renderHP(textId, barId, hp, maxHp) {
+    const el = document.getElementById(textId);
+    const bar = document.getElementById(barId);
+    const wrap = bar ? bar.parentElement : null;
+    const clamped = Math.max(0, hp);
+    const base = maxHp || BASE_HP;
+    if (el) el.textContent = clamped;
+    if (bar && wrap) {
+        // Scale wrap width relative to BASE_HP so bars are comparable
+        const wrapScale = Math.min(2, base / BASE_HP); // cap at 2x width
+        wrap.style.maxWidth = Math.round(160 * wrapScale) + 'px';
+        const pct = Math.min(100, (clamped / base) * 100);
+        bar.style.width = pct + '%';
+        bar.className = 'hp-bar' + (pct <= 25 ? ' hp-critical' : pct <= 50 ? ' hp-low' : '');
     }
 }
 
@@ -143,17 +159,17 @@ export function addHistoryItem(data) {
 
     const yourMove = MOVES[data.yourMove];
     const oppMove = MOVES[data.opponentMove];
+    const resultLabel = data.result === 'win' ? '🏆 Thắng' : data.result === 'lose' ? '💀 Thua' : '🤝 Hòa';
+    const hpInfo = `❤️ ${data.yourState.hp} HP`;
 
     const item = document.createElement('div');
     item.className = 'history-item slide-in';
     item.innerHTML = `
     <div class="history-turn">Lượt ${data.turn}</div>
     <div class="history-moves">
-      Bạn: ${yourMove.emoji} ${yourMove.name} vs ${oppMove.emoji} ${oppMove.name}
+      ${yourMove ? yourMove.emoji + ' ' + yourMove.name : '⏱️'} vs ${oppMove ? oppMove.emoji + ' ' + oppMove.name : '⏱️'}
     </div>
-    <div class="history-result ${data.result}">${data.result === 'win' ? '🏆 Thắng' :
-            data.result === 'lose' ? '💀 Thua' : '🤝 Hòa'
-        }</div>
+    <div class="history-result ${data.result}">${resultLabel} — ${hpInfo}</div>
   `;
     list.prepend(item);
 }

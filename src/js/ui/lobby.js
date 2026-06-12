@@ -88,11 +88,6 @@ export function setupLobbyEvents() {
         location.reload();
     });
 
-    // History Toggle
-    document.getElementById('history-toggle')?.addEventListener('click', () => {
-        updateGameState({ historyOpen: !gameState.historyOpen });
-        document.getElementById('history-panel').classList.toggle('open', gameState.historyOpen);
-    });
 }
 
 export function renderAugmentCards(augments) {

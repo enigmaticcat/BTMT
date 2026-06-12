@@ -25,7 +25,7 @@ function chooseAIMove(difficulty, aiState, playerState, history) {
             if (attacks.length > 0) return pick(attacks);
         }
 
-        if (ab === 0) return 'nap';
+        if (ab === 0 && !aiState.cooldown) return 'nap';
 
         const lastMoves = history.slice(-3);
         const playerNaps = lastMoves.filter(h => h.p2Move === 'nap' || h.p1Move === 'nap').length;

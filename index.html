@@ -80,8 +80,11 @@
       <div class="player-info">
         <span class="player-label">🎯 Đối thủ</span>
         <div class="stats">
-          <div class="timebank">⏳ <span id="opponent-time">30.0</span>s</div>
-          <div class="lives" id="opponent-lives"></div>
+          <div class="timebank">⏳ <span id="opponent-time">15.0</span>s</div>
+          <div class="hp-display">
+            ❤️ <span id="opponent-hp">100</span> HP
+            <div class="hp-bar-wrap"><div class="hp-bar" id="opponent-hp-bar" style="width:100%"></div></div>
+          </div>
           <div class="bullets-display">
             <span class="bullet-icon">💰</span>
             <span id="opponent-bullets">0</span>
@@ -120,8 +123,11 @@
       <div class="player-info">
         <span class="player-label">🎮 Bạn</span>
         <div class="stats">
-          <div class="timebank">⏳ <span id="your-time">30.0</span>s</div>
-          <div class="lives" id="your-lives"></div>
+          <div class="timebank">⏳ <span id="your-time">15.0</span>s</div>
+          <div class="hp-display">
+            ❤️ <span id="your-hp">100</span> HP
+            <div class="hp-bar-wrap"><div class="hp-bar" id="your-hp-bar" style="width:100%"></div></div>
+          </div>
           <div class="bullets-display">
             <span class="bullet-icon">💰</span>
             <span id="your-bullets">0</span>
@@ -156,7 +162,10 @@
     <!-- History sidebar toggle -->
     <button class="history-toggle" id="history-toggle">📜</button>
     <div class="history-panel" id="history-panel">
-      <h3>Lịch sử</h3>
+      <div class="history-header">
+        <h3>Lịch sử</h3>
+        <button class="history-close" id="history-close">✕</button>
+      </div>
       <div class="history-list" id="history-list"></div>
     </div>
   </div>
